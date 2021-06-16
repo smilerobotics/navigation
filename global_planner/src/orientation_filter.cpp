@@ -83,6 +83,7 @@ void OrientationFilter::processPath(const geometry_msgs::PoseStamped& start,
             interpolate(path, 0, n-1);
             break;
         case FORWARDTHENINTERPOLATE:
+        {
             for(int i=0;i<n-1;i++){
                 setAngleBasedOnPositionDerivative(path, i);
             }
@@ -100,10 +101,37 @@ void OrientationFilter::processPath(const geometry_msgs::PoseStamped& start,
             
             path[0].pose.orientation = start.pose.orientation;
             interpolate(path, i, n-1);
-            break;           
+            break;
+        }
+        case AUTOMATIC:
+            for(int i = 0; i < n - 1; i++) {
+                setAngleBasedOnPositionDerivative(path, i);
+            }
+            if (n < 2) {
+                return;
+            }
+
+            const double forward_start_rotation =
+                std::abs(tf2::getYaw(path[0].pose.orientation) - tf2::getYaw(start.pose.orientation));
+            const double forward_goal_rotation =
+                std::abs(tf2::getYaw(path[n - 2].pose.orientation) - tf2::getYaw(path[n - 1].pose.orientation));
+
+            const double forward_additional_rotation = forward_start_rotation + forward_goal_rotation;
+            const double backward_additional_rotation
+            = std::abs(forward_additional_rotation - 2.0 * M_PI);
+
+            // check whether FORWARD or BACKWARD is optimal in rotation
+            // * nothing to do for using FORWARD
+            if (forward_additional_rotation > backward_additional_rotation) {
+                // use BACKWARD
+                for(int i = 0; i < n - 1; i++) {
+                    set_angle(&path[i], angles::normalize_angle(tf2::getYaw(path[i].pose.orientation) + M_PI));
+                }
+            }
+            break;
     }
 }
-    
+
 void OrientationFilter::setAngleBasedOnPositionDerivative(std::vector<geometry_msgs::PoseStamped>& path, int index)
 {
   int index0 = std::max(0, index - window_size_);
@@ -130,6 +158,4 @@ void OrientationFilter::interpolate(std::vector<geometry_msgs::PoseStamped>& pat
         set_angle(&path[i], angle);
     }
 }
-                                   
-
 };
