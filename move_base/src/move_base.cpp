@@ -492,11 +492,13 @@ namespace move_base {
 
     const geometry_msgs::PoseStamped& start = global_pose;
 
+    ROS_INFO("making plan with GlobalPlanner");
     //if the planner fails or returns a zero length plan, planning failed
     if(!planner_->makePlan(start, goal, plan) || plan.empty()){
-      ROS_DEBUG_NAMED("move_base","Failed to find a  plan to point (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
+      ROS_INFO_NAMED("move_base","Failed to find a  plan to point (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
       return false;
     }
+    ROS_INFO("succeeded to make plan with GlobalPlanner");
 
     return true;
   }
@@ -567,7 +569,7 @@ namespace move_base {
   }
 
   void MoveBase::planThread(){
-    ROS_DEBUG_NAMED("move_base_plan_thread","Starting planner thread...");
+    ROS_INFO_NAMED("move_base_plan_thread","Starting planner thread...");
     ros::NodeHandle n;
     ros::Timer timer;
     bool wait_for_wake = false;
@@ -585,14 +587,14 @@ namespace move_base {
       //time to plan! get a copy of the goal and unlock the mutex
       geometry_msgs::PoseStamped temp_goal = planner_goal_;
       lock.unlock();
-      ROS_DEBUG_NAMED("move_base_plan_thread","Planning...");
+      ROS_INFO_NAMED("move_base_plan_thread","Planning...");
 
       //run planner
       planner_plan_->clear();
       bool gotPlan = n.ok() && makePlan(temp_goal, *planner_plan_);
 
       if(gotPlan){
-        ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
+        ROS_INFO_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
 
@@ -603,7 +605,7 @@ namespace move_base {
         planning_retries_ = 0;
         new_global_plan_ = true;
 
-        ROS_DEBUG_NAMED("move_base_plan_thread","Generated a plan from the base_global_planner");
+        ROS_INFO_NAMED("move_base_plan_thread","Generated a plan from the base_global_planner");
 
         //make sure we only start the controller if we still haven't reached the goal
         if(runPlanner_)
@@ -614,7 +616,7 @@ namespace move_base {
       }
       //if we didn't get a plan and we are in the planning state (the robot isn't moving)
       else if(state_==PLANNING){
-        ROS_DEBUG_NAMED("move_base_plan_thread","No Plan...");
+        ROS_INFO_NAMED("move_base_plan_thread","No Plan...");
         ros::Time attempt_end = last_valid_plan_ + ros::Duration(planner_patience_);
 
         //check if we've tried to make a plan for over our time limit or our maximum number of retries
@@ -868,6 +870,7 @@ namespace move_base {
     }
 
     //the move_base state machine, handles the control logic for navigation
+    ROS_INFO("move_base state: %d", state_);
     switch(state_){
       //if we are in a planning state, then we'll attempt to make a plan
       case PLANNING:
@@ -876,12 +879,12 @@ namespace move_base {
           runPlanner_ = true;
           planner_cond_.notify_one();
         }
-        ROS_DEBUG_NAMED("move_base","Waiting for plan, in the planning state.");
+        ROS_INFO_NAMED("move_base","Waiting for plan, in the planning state.");
         break;
 
       //if we're controlling, we'll attempt to find valid velocity commands
       case CONTROLLING:
-        ROS_DEBUG_NAMED("move_base","In controlling state.");
+        ROS_INFO_NAMED("move_base","In controlling state.");
 
         //check to see if we've reached our goal
         if(tc_->isGoalReached()){
@@ -949,10 +952,10 @@ namespace move_base {
 
       //we'll try to clear out space with any user-provided recovery behaviors
       case CLEARING:
-        ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
+        ROS_INFO_NAMED("move_base","In clearing/recovery state");
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
         if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
-          ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_+1, recovery_behaviors_.size());
+          ROS_INFO_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_+1, recovery_behaviors_.size());
 
           move_base_msgs::RecoveryStatus msg;
           msg.pose_stamped = current_position;
@@ -977,7 +980,7 @@ namespace move_base {
           recovery_index_++;
         }
         else{
-          ROS_DEBUG_NAMED("move_base_recovery","All recovery behaviors have failed, locking the planner and disabling it.");
+          ROS_INFO_NAMED("move_base_recovery","All recovery behaviors have failed, locking the planner and disabling it.");
           //disable the planner thread
           boost::unique_lock<boost::recursive_mutex> lock(planner_mutex_);
           runPlanner_ = false;
