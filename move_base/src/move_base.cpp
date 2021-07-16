@@ -965,7 +965,9 @@ namespace move_base {
 
           recovery_status_pub_.publish(msg);
 
+          ROS_INFO_NAMED("move_base_recovery","running behavior...");
           recovery_behaviors_[recovery_index_]->runBehavior();
+          ROS_INFO_NAMED("move_base_recovery","running behavior finished.");
 
           //we at least want to give the robot some time to stop oscillating after executing the behavior
           last_oscillation_reset_ = ros::Time::now();
